@@ -1,0 +1,311 @@
+﻿@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<link rel="stylesheet" href="~/css/style.css" />
+<div style="text-align:right; margin-bottom:10px;">
+    <button onclick="logout()" style="width:120px;">Logout</button>
+</div>
+<h2 style="text-align:center;">AI Prediction Dashboard</h2>
+
+<div class="container">
+
+    
+    <!-- LEFT SIDE -->
+    <div class="left">
+
+        <!-- Rainfall -->
+        <div class="card">
+            <h3>Rainfall Prediction</h3>
+            <label>Temperature (°C)</label>
+            <input id="temp" placeholder="Temperature (°C)">
+            <label>Humidity (%)</label>
+            <input id="humidity" placeholder="Humidity (%)">
+            <label>Wind Speed (km/h)</label>
+            <input id="wind" placeholder="Wind Speed (km/h)">
+            <label>Pressure (hPa)</label>
+            <input id="pressure" placeholder="Pressure (hPa)">
+
+            <button onclick="predictRain()">Predict Rainfall</button>
+
+        </div>
+
+        <!-- Calories -->
+        <div class="card">
+            <h3>Calories Burn Calculator</h3>
+
+            <label>Weight (kg)</label>
+            <input id="weight" placeholder="Weight (kg)">
+            <label>Duration (mins)</label>
+            <input id="duration" placeholder="Duration (mins)">
+            <label>Heart Rate (bpm)</label>
+            <input id="heart" placeholder="Heart Rate">
+
+            <label>Exercise Type</label>
+            <select id="exercise">
+                <option>Running</option>
+                <option>Cycling</option>
+                <option>Walking</option>
+            </select>
+
+            <button onclick="predictCalories()">Predict Calories</button>
+        </div>
+
+        <!-- Laptop -->
+        <div class="card">
+            <h3>Laptop Price Predictor</h3>
+
+            <label>Brand</label>
+            <select id="brand">
+                <option>Dell</option>
+                <option>HP</option>
+                <option>Lenovo</option>
+                <option>Asus</option>
+                <option>Acer</option>
+            </select>
+
+            <label>RAM (GB)</label>
+            <input id="ram" placeholder="RAM (GB)">
+            <label>Storage (GB)</label>
+            <input id="storage" placeholder="Storage (GB)">
+
+            <label>Processor</label>
+            <select id="processor">
+                <option>i3</option>
+                <option>i5</option>
+                <option>i7</option>
+                <option>i9</option>
+            </select>
+            <label>Screen Size (inches)</label>
+            <input id="screen" placeholder="Screen Size (in)">
+
+            <button onclick="predictLaptop()">Predict Price</button>
+        </div>
+
+    </div>
+
+    <!-- RIGHT SIDE -->
+    <div class="right">
+
+        <!-- Rainfall Result -->
+        <div class="card result-box">
+            <h3>Prediction Result</h3>
+            <div id="rainOutput" class="result-value">--</div>
+            <div id="rainMetrics" class="metrics"></div>
+            <button onclick="resetRain()">Predict Again</button>
+        </div>
+
+        <!-- Calories Result -->
+        <div class="card result-box">
+            <h3>Prediction Result</h3>
+            <div id="calOutput" class="result-value">--</div>
+            <div id="calMetrics" class="metrics"></div>
+            <button onclick="resetCalories()">Try Again</button>
+        </div>
+
+        <!-- Laptop Result -->
+        <div class="card result-box">
+            <h3>Prediction Result</h3>
+            <div id="lapOutput" class="result-value">--</div>
+            <div id="lapMetrics" class="metrics"></div>
+            <button onclick="resetLaptop()">Predict Another</button>
+        </div>
+
+    </div>
+    
+
+</div>
+
+<p id="loader" style="text-align:center; font-weight:bold; display:none;">
+    Predicting...
+</p>
+
+<script>
+        window.onload = function () {
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+            // ❌ Not logged in
+            window.location.href = "/Auth/Login";
+        }
+    };
+    
+    async function predictRain() {
+        try {
+            var temp = parseFloat(document.getElementById("temp").value);
+            var hum = parseFloat(document.getElementById("humidity").value);
+            var wind = parseFloat(document.getElementById("wind").value);
+            var pres = parseFloat(document.getElementById("pressure").value);
+
+            const token = localStorage.getItem("token");
+
+            const res = await fetch("/api/Rainfall/predict", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + token
+                },
+                body: JSON.stringify({
+                    temperature: temp,
+                    humidity: hum,
+                    windSpeed: wind,
+                    pressure: pres
+                })
+            });
+
+            const data = await res.json();
+
+            if (data.isDummy === true) {
+                alert("⚠ Using dummy data");
+            }
+    // ✅ Prediction
+    document.getElementById("rainOutput").innerHTML =
+        "Predicted Rainfall: <b>" + (data.predictedRainfall || 0).toFixed(2) + " mm</b><hr>";
+
+    // ✅ 🔥 ADD THIS (YOUR MISSING PART)
+    document.getElementById("rainMetrics").innerHTML =
+        "<b>Accuracy Metrics:</b><br>" +
+        "RMSE: " + (data.rmse || 0).toFixed(2) + "<br>" +
+        "MAE: " + (data.mae || 0).toFixed(2) + "<br>" +
+        "R²: " + (data.r2 || 0).toFixed(2);
+
+        } catch (e) {
+            alert("Error in rainfall");
+        }
+    }
+
+    function resetRain() {
+        document.getElementById("temp").value = "";
+        document.getElementById("humidity").value = "";
+        document.getElementById("wind").value = "";
+        document.getElementById("pressure").value = "";
+
+        document.getElementById("rainOutput").innerText = "--";
+        document.getElementById("rainMetrics").innerHTML = "";
+    }
+
+
+    async function predictCalories() {
+        console.log("Calories clicked");
+
+        try {
+            var w = parseFloat(document.getElementById("weight").value);
+            var d = parseFloat(document.getElementById("duration").value);
+            var h = parseFloat(document.getElementById("heart").value);
+            var ex = document.getElementById("exercise").value;
+
+            if (isNaN(w) || isNaN(d) || isNaN(h)) {
+                alert("Enter valid inputs");
+                return;
+            }
+
+            const token = localStorage.getItem("token");
+
+            const res = await fetch("/api/Calories/predict", {
+                   method: "POST",
+    headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token
+    },
+                body: JSON.stringify({
+                    weight: w,
+                    duration: d,
+                    heartRate: h,
+                    exerciseType: ex
+                })
+            });
+
+            const data = await res.json();
+
+        
+    
+
+     document.getElementById("calOutput").innerHTML =
+        "Calories Burned: <b>" + data.predictedCalories.toFixed(2) + " kcal</b><hr>";
+
+    document.getElementById("calMetrics").innerHTML =
+        "<b>Accuracy Metrics:</b><br>" +
+        "MAE: " + data.mae.toFixed(2) + "<br>" +
+        "RMSE: " + data.rmse.toFixed(2) + "<br>" +
+        "R²: " + data.r2.toFixed(2);
+
+        } catch (e) {
+            console.error(e);
+            alert("Error in calories");
+        }
+    }
+        function resetCalories() {
+        document.getElementById("weight").value = "";
+        document.getElementById("duration").value = "";
+        document.getElementById("heart").value = "";
+
+        document.getElementById("calOutput").innerText = "--";
+        document.getElementById("calMetrics").innerHTML = "";
+    }
+
+    async function predictLaptop() {
+        console.log("Laptop clicked");
+
+        try {
+            var brand = document.getElementById("brand").value;
+            var ram = parseFloat(document.getElementById("ram").value);
+            var storage = parseFloat(document.getElementById("storage").value);
+            var proc = document.getElementById("processor").value;
+            var screen = parseFloat(document.getElementById("screen").value);
+
+            if (isNaN(ram) || isNaN(storage) || isNaN(screen)) {
+                alert("Enter valid inputs");
+                return;
+            }
+
+            const token = localStorage.getItem("token");
+
+            const res = await fetch("/api/Laptop/predict", {
+              method: "POST",
+    headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token
+    },
+                body: JSON.stringify({
+                    brand: brand,
+                    ram: ram,
+                    storage: storage,
+                    processor: proc,
+                    screenSize: screen
+                })
+            });
+
+            const data = await res.json();
+
+         
+    
+
+    document.getElementById("lapOutput").innerHTML =
+        "Estimated Price: <b>₹" + data.predictedPrice.toFixed(0) + "</b><hr>";
+
+    document.getElementById("lapMetrics").innerHTML =
+        "<b>Accuracy Metrics:</b><br>" +
+        "MAE: ₹" + data.mae.toFixed(0) + "<br>" +
+        "RMSE: ₹" + data.rmse.toFixed(0) + "<br>" +
+        "R²: " + data.r2.toFixed(2);
+
+        } catch (e) {
+            console.error(e);
+            alert("Error in laptop");
+        }
+    }
+        function resetLaptop() {
+        document.getElementById("ram").value = "";
+        document.getElementById("storage").value = "";
+        document.getElementById("screen").value = "";
+
+        document.getElementById("lapOutput").innerText = "--";
+        document.getElementById("lapMetrics").innerHTML = "";
+    }
+
+        function logout() {
+        localStorage.removeItem("token");
+        window.location.href = "/Auth/Login";
+    }
+
+</script>

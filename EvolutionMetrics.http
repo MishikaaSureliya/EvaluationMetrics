@@ -1,0 +1,6 @@
+@EvolutionMetrics_HostAddress = http://localhost:5134
+
+GET {{EvolutionMetrics_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

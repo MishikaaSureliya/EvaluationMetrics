@@ -1,0 +1,58 @@
+﻿@{
+    ViewData["Title"] = "Register";
+}
+<link rel="stylesheet" href="~/css/style.css" />
+
+<h2 style="text-align:center;">Register</h2>
+
+<div style="width:300px; margin:auto;">
+    <label for="name">Name</label>
+    <input id="name" placeholder="Name" />
+    <label for="email">Email</label>
+    <input id="email" placeholder="Email" />
+    <label for="password">Password</label>
+    <input id="password" type="password" placeholder="Password" />
+    <label for="confirmPassword">Confirm Password</label>
+    <input id="confirmPassword" type="password" placeholder="Confirm Password" />
+
+    <button onclick="register()">Register</button>
+
+    <p style="text-align:center;">
+        Already have account? <a href="/Auth/Login">Login</a>
+    </p>
+</div>
+
+<script>
+    async function register() {
+        var name = document.getElementById("name").value;
+        var email = document.getElementById("email").value;
+        var password = document.getElementById("password").value;
+        var confirmPassword = document.getElementById("confirmPassword").value;
+
+        if (password !== confirmPassword) {
+            alert("Passwords do not match");
+            return;
+        }
+
+        const res = await fetch("/api/auth/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                name: name,
+                email: email,
+                password: password,
+                confirmPassword: confirmPassword
+            })
+        });
+
+        const data = await res.text(); // 🔥 important
+
+        if (!res.ok) {
+            alert(data);  // ✅ SHOW REAL ERROR
+            return;
+        }
+
+        alert("Registered successfully");
+        window.location.href = "/Auth/Login";
+    }
+</script>

@@ -1,0 +1,45 @@
+﻿@{
+    ViewData["Title"] = "Login";
+}
+<link rel="stylesheet" href="~/css/style.css" />
+
+<h2 style="text-align:center;">Login</h2>
+
+<div style="width:300px; margin:auto;">
+    <label for="email">Email</label>
+    <input id="email" placeholder="Email" />
+    <label for="password">Password</label>
+    <input id="password" type="password" placeholder="Password" />
+
+    <button onclick="login()">Login</button>
+
+    <p style="text-align:center;">
+        Don't have account? <a href="/Auth/Register">Register</a>
+    </p>
+</div>
+
+<script>
+        localStorage.setItem("token", data.token);
+    window.location.href = "/Dashboard/Index";
+    async function login() {
+        var email = document.getElementById("email").value;
+        var password = document.getElementById("password").value;
+
+        const res = await fetch("/api/auth/login?email=" + email + "&password=" + password, {
+            method: "POST"
+        });
+
+        if (!res.ok) {
+            alert("Invalid login");
+            return;
+        }
+
+        const data = await res.json();
+
+        // ✅ store token
+        localStorage.setItem("token", data.token);
+
+        // ✅ redirect
+        window.location.href = "/Dashboard/Index";
+    }
+</script>
