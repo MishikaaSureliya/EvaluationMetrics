@@ -32,7 +32,7 @@ namespace EvolutionMetrics.Controllers
 
             return Ok(new
             {
-                predictedRainfall =  result.prediction,
+                predictedRainfall = result.prediction,
                 isDummy = result.isDummy,   // 🔥 IMPORTANT
 
                 mae = double.IsNaN(_service.Metrics.MAE) || double.IsInfinity(_service.Metrics.MAE) ? 0 : _service.Metrics.MAE,
