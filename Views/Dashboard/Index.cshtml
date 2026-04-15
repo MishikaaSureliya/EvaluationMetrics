@@ -1,4 +1,4 @@
-﻿﻿@{
+﻿@{
 ViewData["Title"] = "Dashboard";
 }
 
@@ -116,6 +116,20 @@ ViewData["Title"] = "Dashboard";
 
 </div>
 
+<!-- Dummy Data Toast (Rainfall only) -->
+<div id="dummyToast">
+    <span class="toast-icon">⚠️</span>
+    <div class="toast-body">
+        <div class="toast-title">Using Dummy Training Data</div>
+        <div class="toast-msg">
+            No real rainfall dataset was found.<br>
+            Predictions are based on synthetic data and may not reflect real-world accuracy.
+        </div>
+    </div>
+    <button class="toast-close" onclick="hideDummyToast()" title="Dismiss">✕</button>
+    <div class="toast-bar"></div>
+</div>
+
 <p id="loader" style="text-align:center; font-weight:bold; display:none;">
     Predicting...
 </p>
@@ -130,12 +144,40 @@ ViewData["Title"] = "Dashboard";
         }
     };
     
+    // ── Dummy Toast helpers (Rainfall only) ──────────────────────────
+    let _toastTimer = null;
+
+    function showDummyToast() {
+        const toast = document.getElementById("dummyToast");
+        // Reset bar animation by replacing the element clone
+        const bar = toast.querySelector(".toast-bar");
+        bar.style.animation = "none";
+        void toast.offsetWidth; // reflow
+        bar.style.animation = "";
+
+        toast.classList.add("show");
+
+        if (_toastTimer) clearTimeout(_toastTimer);
+        _toastTimer = setTimeout(hideDummyToast, 5000);
+    }
+
+    function hideDummyToast() {
+        document.getElementById("dummyToast").classList.remove("show");
+        if (_toastTimer) { clearTimeout(_toastTimer); _toastTimer = null; }
+    }
+    // ─────────────────────────────────────────────────────────────────
+
     async function predictRain() {
         try {
             var temp = parseFloat(document.getElementById("temp").value);
-            var hum = parseFloat(document.getElementById("humidity").value);
+            var hum  = parseFloat(document.getElementById("humidity").value);
             var wind = parseFloat(document.getElementById("wind").value);
             var pres = parseFloat(document.getElementById("pressure").value);
+
+            if (isNaN(temp) || isNaN(hum) || isNaN(wind) || isNaN(pres)) {
+                alert("Please enter valid numeric values for all fields.");
+                return;
+            }
 
             const token = localStorage.getItem("token");
 
@@ -146,31 +188,39 @@ ViewData["Title"] = "Dashboard";
                     "Authorization": "Bearer " + token
                 },
                 body: JSON.stringify({
-                    temperature: temp,
-                    humidity: hum,
-                    windSpeed: wind,
-                    pressure: pres
+                    data: [{
+                        temperature: temp,
+                        humidity:    hum,
+                        windSpeed:   wind,
+                        pressure:    pres
+                    }]
                 })
             });
 
             const data = await res.json();
 
-            if (data.isDummy === true) {
-                alert("⚠ Using dummy data");
+            // Show toast if the model fell back to dummy training data
+            const firstResult = data.predictions && data.predictions[0];
+            if (firstResult && firstResult.isDummy === true) {
+                showDummyToast();
+            } else {
+                hideDummyToast();
             }
-    // ✅ Prediction
-    document.getElementById("rainOutput").innerHTML =
-        "Predicted Rainfall: <b>" + (data.predictedRainfall || 0).toFixed(2) + " mm</b><hr>";
 
-    // ✅ 🔥 ADD THIS (YOUR MISSING PART)
-    document.getElementById("rainMetrics").innerHTML =
-        "<b>Accuracy Metrics:</b><br>" +
-        "RMSE: " + (data.rmse || 0).toFixed(2) + "<br>" +
-        "MAE: " + (data.mae || 0).toFixed(2) + "<br>" +
-        "R²: " + (data.r2 || 0).toFixed(2);
+            const predictedValue = firstResult ? firstResult.prediction : 0;
+
+            document.getElementById("rainOutput").innerHTML =
+                "Predicted Rainfall: <b>" + predictedValue.toFixed(2) + " mm</b><hr>";
+
+            document.getElementById("rainMetrics").innerHTML =
+                "<b>Accuracy Metrics:</b><br>" +
+                "MAE: "  + (data.mae  || 0).toFixed(2) + "<br>" +
+                "RMSE: " + (data.rmse || 0).toFixed(2) + "<br>" +
+                "R²: "   + (data.r2   || 0).toFixed(2);
 
         } catch (e) {
-            alert("Error in rainfall");
+            console.error(e);
+            alert("Error predicting rainfall. Please try again.");
         }
     }
 

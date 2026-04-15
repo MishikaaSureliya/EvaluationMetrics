@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace EvolutionMetrics.DTOs
 {
@@ -6,21 +6,20 @@ namespace EvolutionMetrics.DTOs
     {
         [Required]
         [RegularExpression(@"^[A-Za-z\s]+$", ErrorMessage = "Name should contain only characters")]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         [Required]
         [EmailAddress]
-        public string Email { get; set; }
+        public string Email { get; set; } = string.Empty;
 
         [Required]
         [MinLength(8)]
         [RegularExpression(@"^(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).+$",
             ErrorMessage = "Password must contain 1 uppercase, 1 number, 1 special character")]
-        public string Password { get; set; }
+        public string Password { get; set; } = string.Empty;
 
-        // ✅ NEW FIELD
         [Required]
         [Compare("Password", ErrorMessage = "Passwords do not match")]
-        public string ConfirmPassword { get; set; }
+        public string ConfirmPassword { get; set; } = string.Empty;
     }
 }

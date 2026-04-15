@@ -1,37 +1,48 @@
-﻿using EvolutionMetrics.Models;
+using EvolutionMetrics.Models;
 using Microsoft.ML;
 using Microsoft.ML.Data;
-using Serilog;
 
 namespace EvolutionMetrics.Services
 {
-    public class RainfallService : BaseMLService
+    /// <summary>
+    /// ML service responsible for training and predicting rainfall amounts.
+    /// </summary>
+    public class RainfallService : BaseMLService, IRainfallService
     {
         private readonly MLContext _mlContext;
-        private ITransformer _model;
+        private readonly ILogger<RainfallService> _logger;
+        private ITransformer? _model;
 
+        /// <summary>
+        /// Indicates whether the service is using fallback dummy training data.
+        /// </summary>
         public bool IsUsingDummy { get; set; } = false;
 
-        public RainfallService()
+        public RainfallService(ILogger<RainfallService> logger)
         {
             _mlContext = new MLContext();
+            _logger = logger;
         }
 
-        // 🔥 Load or Train
+        /// <summary>
+        /// Loads or trains the rainfall ML model from the specified CSV data path.
+        /// Falls back to dummy data if the file does not exist or is empty.
+        /// </summary>
         public void LoadOrTrain(string dataPath)
         {
             if (!File.Exists(dataPath))
             {
+                _logger.LogWarning("Rainfall dataset not found at {Path}. Using dummy data.", dataPath);
                 IsUsingDummy = true;
                 TrainFromList(GetDummyData());
                 return;
             }
 
-            // 🔥 CHECK IF FILE HAS DATA
             var lines = File.ReadAllLines(dataPath);
 
-            if (lines.Length <= 1) // only header or empty
+            if (lines.Length <= 1)
             {
+                _logger.LogWarning("Rainfall dataset is empty at {Path}. Using dummy data.", dataPath);
                 IsUsingDummy = true;
                 TrainFromList(GetDummyData());
                 return;
@@ -41,70 +52,68 @@ namespace EvolutionMetrics.Services
             Train(dataPath);
         }
 
-        // 🔥 Train from CSV
+        /// <summary>
+        /// Trains the rainfall ML model using data from the specified CSV file.
+        /// </summary>
         public void Train(string dataPath)
         {
+            _logger.LogInformation("Rainfall training started");
+
             var data = _mlContext.Data.LoadFromTextFile<RainfallData>(
                 dataPath, hasHeader: true, separatorChar: ',');
 
             var split = _mlContext.Data.TrainTestSplit(data, testFraction: 0.3);
 
             var pipeline = _mlContext.Transforms.ReplaceMissingValues(
-                   new[]
-                   {
-            new InputOutputColumnPair(nameof(RainfallData.Temperature)),
-            new InputOutputColumnPair(nameof(RainfallData.Humidity)),
-            new InputOutputColumnPair(nameof(RainfallData.WindSpeed)),
-            new InputOutputColumnPair(nameof(RainfallData.Pressure))
-                   })
-               .Append(_mlContext.Transforms.Concatenate("Features",
-                   nameof(RainfallData.Temperature),
-                   nameof(RainfallData.Humidity),
-                   nameof(RainfallData.WindSpeed),
-                   nameof(RainfallData.Pressure)))
-               .Append(_mlContext.Transforms.NormalizeMinMax("Features"))
-               .Append(_mlContext.Regression.Trainers.FastTree());
+                    new[]
+                    {
+                        new InputOutputColumnPair(nameof(RainfallData.Temperature)),
+                        new InputOutputColumnPair(nameof(RainfallData.Humidity)),
+                        new InputOutputColumnPair(nameof(RainfallData.WindSpeed)),
+                        new InputOutputColumnPair(nameof(RainfallData.Pressure))
+                    })
+                .Append(_mlContext.Transforms.Concatenate("Features",
+                    nameof(RainfallData.Temperature),
+                    nameof(RainfallData.Humidity),
+                    nameof(RainfallData.WindSpeed),
+                    nameof(RainfallData.Pressure)))
+                .Append(_mlContext.Transforms.NormalizeMinMax("Features"))
+                .Append(_mlContext.Regression.Trainers.FastTree());
 
             _model = pipeline.Fit(split.TrainSet);
+
+            _logger.LogInformation("Rainfall model trained successfully");
 
             var predictions = _model.Transform(split.TestSet);
             var metrics = _mlContext.Regression.Evaluate(predictions);
 
             SetMetrics(
-     metrics.MeanAbsoluteError,
-     metrics.RootMeanSquaredError,
-     metrics.RSquared
- );
+                metrics.MeanAbsoluteError,
+                metrics.RootMeanSquaredError,
+                metrics.RSquared);
 
             Directory.CreateDirectory("MLModels");
             _mlContext.Model.Save(_model, data.Schema, "MLModels/rainfall_model.zip");
 
-            Console.WriteLine("✅ Rainfall model saved!");
-
-            Log.Information("📊 Rainfall training started");
-
-            _model = pipeline.Fit(split.TrainSet);
-
-            Log.Information("✅ Model trained successfully");
-
-            _mlContext.Model.Save(_model, data.Schema, "MLModels/rainfall_model.zip");
-
-            Log.Information("💾 Model saved at MLModels/rainfall_model.zip");
+            _logger.LogInformation("Rainfall model saved at MLModels/rainfall_model.zip");
         }
 
-        // 🔥 Train from Dummy Data
+        /// <summary>
+        /// Trains the rainfall ML model using an in-memory list of dummy data records.
+        /// </summary>
         private void TrainFromList(List<RainfallData> dataList)
         {
             var data = _mlContext.Data.LoadFromEnumerable(dataList);
 
             var split = _mlContext.Data.TrainTestSplit(data, testFraction: 0.2);
+
             var pipeline = _mlContext.Transforms.ReplaceMissingValues(
                     new[]
                     {
-            new InputOutputColumnPair(nameof(RainfallData.Temperature)),
-            new InputOutputColumnPair(nameof(RainfallData.Humidity)),
-            new InputOutputColumnPair(nameof(RainfallData.WindSpeed)),
-            new InputOutputColumnPair(nameof(RainfallData.Pressure))
+                        new InputOutputColumnPair(nameof(RainfallData.Temperature)),
+                        new InputOutputColumnPair(nameof(RainfallData.Humidity)),
+                        new InputOutputColumnPair(nameof(RainfallData.WindSpeed)),
+                        new InputOutputColumnPair(nameof(RainfallData.Pressure))
                     })
                 .Append(_mlContext.Transforms.Concatenate("Features",
                     nameof(RainfallData.Temperature),
@@ -118,17 +127,19 @@ namespace EvolutionMetrics.Services
 
             var predictions = _model.Transform(split.TestSet);
             var metrics = _mlContext.Regression.Evaluate(predictions);
+
             SetMetrics(
                 metrics.MeanAbsoluteError,
                 metrics.RootMeanSquaredError,
-                metrics.RSquared
-            );
+                metrics.RSquared);
         }
 
-        // 🔥 Dummy Dataset
+        /// <summary>
+        /// Generates a synthetic dummy dataset for fallback model training.
+        /// </summary>
         private List<RainfallData> GetDummyData()
         {
-            var list = new List<RainfallData>();
+            var dataList = new List<RainfallData>();
 
             for (int i = 0; i < 100; i++)
             {
@@ -137,13 +148,12 @@ namespace EvolutionMetrics.Services
                 float wind = 5 + (i % 15);
                 float pressure = 990 + (i % 30);
 
-                // 🔥 REALISTIC FORMULA
                 float rainfall = (humidity * 0.6f)
                                  - (temp * 0.3f)
                                  + (wind * 0.4f)
                                  + ((1010 - pressure) * 0.5f);
 
-                list.Add(new RainfallData
+                dataList.Add(new RainfallData
                 {
                     Temperature = temp,
                     Humidity = humidity,
@@ -153,17 +163,24 @@ namespace EvolutionMetrics.Services
                 });
             }
 
-            return list;
+            return dataList;
         }
 
-
-        // 🔥 Prediction (with dummy flag)
+        /// <summary>
+        /// Predicts rainfall for the given weather parameters.
+        /// Returns a fallback value if the model is unavailable.
+        /// </summary>
         public (float prediction, bool isDummy) Predict(float temp, float humidity, float wind, float pressure)
         {
             try
             {
+                _logger.LogInformation(
+                    "Rainfall Predict - Temp={Temp}, Humidity={Humidity}, Wind={Wind}, Pressure={Pressure}",
+                    temp, humidity, wind, pressure);
+
                 if (_model == null)
                 {
+                    _logger.LogWarning("Rainfall model is not loaded. Returning fallback value.");
                     return (50.0f, true);
                 }
 
@@ -179,11 +196,11 @@ namespace EvolutionMetrics.Services
 
                 return (prediction.PredictedRainfall, IsUsingDummy);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "Rainfall prediction error");
                 return (50.0f, true);
             }
-            Log.Information("🔍 Predict called with Temp={Temp}, Humidity={Humidity}", temp, humidity);
         }
     }
 }

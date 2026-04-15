@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using EvolutionMetrics.Data;
 using EvolutionMetrics.Models;
@@ -7,60 +7,83 @@ using EvolutionMetrics.DTOs;
 
 namespace EvolutionMetrics.Controllers
 {
-    [AllowAnonymous] // ✅ important
+    [AllowAnonymous]
     public class AuthController : Controller
     {
         private readonly AppDbContext _context;
-        private readonly JwtService _jwt;
+        private readonly IJwtService _jwtService;
+        private readonly ILogger<AuthController> _logger;
 
-        public AuthController(AppDbContext context, JwtService jwt)
+        public AuthController(AppDbContext context, IJwtService jwtService, ILogger<AuthController> logger)
         {
             _context = context;
-            _jwt = jwt;
+            _jwtService = jwtService;
+            _logger = logger;
         }
 
-        // 🔹 PAGE: Login
+        /// <summary>
+        /// Returns the Login page view.
+        /// </summary>
         public IActionResult Login()
         {
             return View();
         }
 
-        // 🔹 PAGE: Register
+        /// <summary>
+        /// Returns the Register page view.
+        /// </summary>
         public IActionResult Register()
         {
             return View();
         }
 
-        // 🔹 API: Register
+        /// <summary>
+        /// Registers a new user account with the provided details.
+        /// </summary>
         [HttpPost]
         [Route("api/auth/register")]
         public IActionResult RegisterUser([FromBody] RegisterDto dto)
         {
             if (!ModelState.IsValid)
+            {
                 return BadRequest(ModelState);
+            }
 
             if (_context.Users.Any(u => u.Email == dto.Email || u.Name == dto.Name))
-                return BadRequest("User already exists");
-
-            string hash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
-
-            var user = new User
             {
-                Name = dto.Name,
-                Email = dto.Email,
-                PasswordHash = hash,
+                return BadRequest("User already exists");
+            }
 
-                CreatedBy = dto.Name,              // ✅ FIX HERE
-                CreatedDate = DateTime.UtcNow
-            };
+            try
+            {
+                string passwordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
 
-            _context.Users.Add(user);
-            _context.SaveChanges();
+                var user = new User
+                {
+                    Name = dto.Name,
+                    Email = dto.Email,
+                    PasswordHash = passwordHash,
+                    CreatedBy = dto.Name,
+                    CreatedDate = DateTime.UtcNow
+                };
 
-            return Ok("Registered successfully");
+                _context.Users.Add(user);
+                _context.SaveChanges();
+
+                _logger.LogInformation("User registered successfully: {Name}", dto.Name);
+
+                return Ok("Registered successfully");
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogError(ex, "Failed to register user: {Name}", dto.Name);
+                throw;
+            }
         }
 
-        // 🔹 API: Login
+        /// <summary>
+        /// Authenticates a user and returns a signed JWT token.
+        /// </summary>
         [HttpPost]
         [Route("api/auth/login")]
         public IActionResult LoginUser(string email, string password)
@@ -68,9 +91,13 @@ namespace EvolutionMetrics.Controllers
             var user = _context.Users.FirstOrDefault(u => u.Email == email);
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+            {
                 return Unauthorized("Invalid credentials");
+            }
 
-            var token = _jwt.GenerateToken(user);
+            var token = _jwtService.GenerateToken(user);
+
+            _logger.LogInformation("User logged in: {Email}", email);
 
             return Ok(new { token });
         }

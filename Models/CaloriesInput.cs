@@ -1,5 +1,3 @@
-﻿using Microsoft.AspNetCore.Routing.Constraints;
-
 namespace EvolutionMetrics.Models
 {
     public class CaloriesInput

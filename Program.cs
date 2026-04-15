@@ -17,25 +17,28 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
-// ✅ Database
+// Database
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddHttpContextAccessor();
 
-// ✅ Services
-builder.Services.AddSingleton<RainfallService>();
-builder.Services.AddSingleton<CaloriesService>();
-builder.Services.AddSingleton<LaptopService>();
+// ML Services registered as Singleton to retain trained models across requests
+builder.Services.AddSingleton<IRainfallService, RainfallService>();
+builder.Services.AddSingleton<ICaloriesService, CaloriesService>();
+builder.Services.AddSingleton<ILaptopService, LaptopService>();
 
-// ✅ JWT Service
-builder.Services.AddScoped<JwtService>();
+// JWT Service
+builder.Services.AddScoped<IJwtService, JwtService>();
 
-// ✅ Controllers
+// Controllers
 builder.Services.AddControllersWithViews();
 
-// ✅ JWT Authentication
-var key = Encoding.UTF8.GetBytes("THIS_IS_MY_SUPER_SECRET_KEY_123456789");
+// JWT Authentication - key is read from configuration (appsettings.json)
+var jwtKey = builder.Configuration["Jwt:Key"]
+    ?? throw new InvalidOperationException("JWT key is not configured.");
+
+var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -46,7 +49,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = false,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(key)
+            IssuerSigningKey = new SymmetricSecurityKey(keyBytes)
         };
     });
 
@@ -84,17 +87,17 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-// ✅ Load ML Models
-var rainfallService = app.Services.GetRequiredService<RainfallService>();
+// Load and train ML models on startup
+var rainfallService = app.Services.GetRequiredService<IRainfallService>();
 rainfallService.LoadOrTrain("Dataset/rainfall.csv");
 
-var caloriesService = app.Services.GetRequiredService<CaloriesService>();
+var caloriesService = app.Services.GetRequiredService<ICaloriesService>();
 caloriesService.LoadOrTrain("Dataset/calories.csv");
 
-var laptopService = app.Services.GetRequiredService<LaptopService>();
+var laptopService = app.Services.GetRequiredService<ILaptopService>();
 laptopService.LoadOrTrain("Dataset/laptop.csv");
 
-// Middleware
+// Middleware pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -106,8 +109,8 @@ app.UseRouting();
 
 app.UseHttpsRedirection();
 
-// ✅ IMPORTANT ORDER
-app.UseAuthentication();   // 🔥 MUST COME BEFORE AUTHORIZATION
+// Authentication MUST come before Authorization
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
